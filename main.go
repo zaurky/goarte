@@ -123,7 +123,7 @@ type JsonBody struct {
 	} `json:"videoJsonPlayer"`
 }
 
-func RetrieveMpgUrl(json_url string) (string, error) {
+func RetrieveMpgUrl(json_url string) (string, string, error) {
 	json_data_s := DownloadUrl(json_url)
 	var json_data JsonBody
 	json.Unmarshal([]byte(json_data_s), &json_data)
@@ -138,21 +138,21 @@ func RetrieveMpgUrl(json_url string) (string, error) {
 	}
 
 	var mpg_url string
-	if val, ok := values["VF"]; ok {
-		mpg_url = val.URL
-	} else if val, ok := values["VO-STF"]; ok {
-		mpg_url = val.URL
-	} else if val, ok := values["VOF-STF"]; ok {
-		mpg_url = val.URL
-	} else if val, ok := values["VOA-STF"]; ok {
-		mpg_url = val.URL
-	} else if val, ok := values["VO"]; ok {
-		mpg_url = val.URL
-	} else {
-		fmt.Println("%s", values)
-		return "", errors.New("Could not find known <VersionCode>")
+	var version_code string
+	known_codes := []string{"VF", "VO-STF", "VOF-STF", "VOA-STF", "VO"}
+
+	for _, version_code = range known_codes {
+		if val, ok := values[version_code]; ok {
+			mpg_url = val.URL
+			break
+		}
 	}
-	return mpg_url, nil
+
+	if mpg_url == "" {
+		fmt.Printf("%s\n", values)
+		return "", "", errors.New("Could not find known <VersionCode>")
+	}
+	return mpg_url, version_code, nil
 }
 
 func DownloadMpg(filepath string, url string) error {
@@ -193,7 +193,7 @@ func main() {
 	}
 
 	// retrieve the json and parse it to get the mpg url
-	mpg_url, err := RetrieveMpgUrl(json_url)
+	mpg_url, version_code, err := RetrieveMpgUrl(json_url)
 	if err != nil {
 		return
 	}
@@ -203,7 +203,7 @@ func main() {
 
 	// forge a name for the file
 	i := strings.Split(conf.url, "/")
-	name := i[6] + "-" + i[5]
+	name := i[6] + "-" + i[5] + "-" + version_code
 	filepath := conf.destination + "/" + name + ".mp4"
 
 	if conf.debug {
