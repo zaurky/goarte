@@ -20,21 +20,19 @@ var Default_destination string = "/tmp"
 type Config struct {
 	url         string
 	destination string
+	debug       bool
 }
 
 func (c *Config) ParseConfig() error {
 	flag.StringVar(&c.url, "url", "", "Arte+7 url")
-	flag.StringVar(&c.destination, "destination", "", "Where we put the video")
+	flag.StringVar(&c.destination, "destination", Default_destination, "Where we put the video")
+	flag.BoolVar(&c.debug, "debug", false, "debug mode")
 
 	flag.Parse()
 
 	if len(c.url) == 0 {
 		fmt.Fprintf(os.Stderr, "You must give an url\n")
 		return errors.New("Missing argument url")
-	}
-
-	if len(c.destination) == 0 {
-		c.destination = Default_destination
 	}
 
 	return nil
@@ -121,50 +119,43 @@ type JsonVid struct {
 
 type JsonBody struct {
 	VideoJSONPlayer struct {
-		VSR struct {
-			HTTPSEQ2 JsonVid `json:"HTTPS_EQ_2"`
-			HTTPSEQ1 JsonVid `json:"HTTPS_EQ_1"`
-			HLSXQ2   JsonVid `json:"HLS_XQ_2"`
-			HLSXQ1   JsonVid `json:"HLS_XQ_1"`
-			HTTPSMQ1 JsonVid `json:"HTTPS_MQ_1"`
-			HTTPSSQ1 JsonVid `json:"HTTPS_SQ_1"`
-			HTTPSHQ1 JsonVid `json:"HTTPS_HQ_1"`
-			HTTPSHQ2 JsonVid `json:"HTTPS_HQ_2"`
-			HTTPSSQ2 JsonVid `json:"HTTPS_SQ_2"`
-			HTTPSMQ2 JsonVid `json:"HTTPS_MQ_2"`
-		} `json:"VSR"`
+		VSR map[string]JsonVid `json:"VSR"`
 	} `json:"videoJsonPlayer"`
 }
 
-func RetrieveMpgUrl(json_url string) string {
+func RetrieveMpgUrl(json_url string) (string, error) {
 	json_data_s := DownloadUrl(json_url)
 	var json_data JsonBody
 	json.Unmarshal([]byte(json_data_s), &json_data)
 
 	json_data_sub := json_data.VideoJSONPlayer.VSR
 
-	var mpg_url string
-	switch {
-	case json_data_sub.HTTPSSQ1 != JsonVid{}:
-		mpg_url = json_data_sub.HTTPSSQ1.URL
-	case json_data_sub.HTTPSSQ2 != JsonVid{}:
-		mpg_url = json_data_sub.HTTPSSQ2.URL
+	values := make(map[string]JsonVid, len(json_data_sub))
+	for _, value := range json_data_sub {
+		if value.Bitrate == 2200 && value.MediaType == "mp4" {
+			values[value.VersionCode] = value
+		}
 	}
-	return mpg_url
-}
 
-/*func DisplayProgress(progress chan int) {
-    for i := range progress {
-        fmt.Printf("\r", "*" * i)
-    }
-}*/
-
-func percent(total_size int, current_size int) int {
-	return 100 * current_size / total_size
+	var mpg_url string
+	if val, ok := values["VF"]; ok {
+		mpg_url = val.URL
+	} else if val, ok := values["VO-STF"]; ok {
+		mpg_url = val.URL
+	} else if val, ok := values["VOF-STF"]; ok {
+		mpg_url = val.URL
+	} else if val, ok := values["VOA-STF"]; ok {
+		mpg_url = val.URL
+	} else if val, ok := values["VO"]; ok {
+		mpg_url = val.URL
+	} else {
+		fmt.Println("%s", values)
+		return "", errors.New("Could not find known <VersionCode>")
+	}
+	return mpg_url, nil
 }
 
 func DownloadMpg(filepath string, url string) error {
-	//func DownloadMpg(filepath string, url string, progress chan int) error {
 	// Get the data
 	resp, err := http.Get(url)
 	if err != nil {
@@ -191,25 +182,33 @@ func main() {
 	if err != nil {
 		return
 	}
-	fmt.Printf("URL : %s\n", conf.url)
+	if conf.debug {
+		fmt.Printf("URL : %s\n", conf.url)
+	}
 
 	// retrieve body data and parse it to get the json url
 	json_url, err := RetrieveJsonUrl(conf.url)
-	fmt.Printf("JSON url : %s\n", json_url)
+	if conf.debug {
+		fmt.Printf("JSON url : %s\n", json_url)
+	}
 
 	// retrieve the json and parse it to get the mpg url
-	mpg_url := RetrieveMpgUrl(json_url)
-	fmt.Printf("MPG url : %s\n", mpg_url)
+	mpg_url, err := RetrieveMpgUrl(json_url)
+	if err != nil {
+		return
+	}
+	if conf.debug {
+		fmt.Printf("MPG url : %s\n", mpg_url)
+	}
 
-	// retrieve the mpg file with a nice progress bar
-	//        progress := make(chan int)
-
+	// forge a name for the file
 	i := strings.Split(conf.url, "/")
 	name := i[6] + "-" + i[5]
 	filepath := conf.destination + "/" + name + ".mp4"
 
-	fmt.Printf("DEST : %s\n", filepath)
+	if conf.debug {
+		fmt.Printf("DEST : %s\n", filepath)
+	}
 
-	//        go DisplayProgress(progress)
-	DownloadMpg(filepath, mpg_url) //, progress)
+	DownloadMpg(filepath, mpg_url)
 }
