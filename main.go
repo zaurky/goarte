@@ -1,28 +1,26 @@
 package main
+
 import (
-	"fmt"
-	"os"
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
+	"golang.org/x/net/html"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"bytes"
-	"golang.org/x/net/html"
-	"io"
+	"os"
 	"strings"
-	"encoding/json"
 )
-
 
 var Default_destination string = "/tmp"
 
-
 type Config struct {
-	url string
+	url         string
 	destination string
 }
-
 
 func (c *Config) ParseConfig() error {
 	flag.StringVar(&c.url, "url", "", "Arte+7 url")
@@ -42,7 +40,6 @@ func (c *Config) ParseConfig() error {
 	return nil
 }
 
-
 func DownloadUrl(url string) string {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -58,14 +55,12 @@ func DownloadUrl(url string) string {
 	return string(html)
 }
 
-
 func renderNode(n *html.Node) string {
 	var buf bytes.Buffer
 	w := io.Writer(&buf)
 	html.Render(w, n)
 	return buf.String()
 }
-
 
 func RetrieveJsonUrl(index_url string) (string, error) {
 	var json_url string
@@ -109,30 +104,28 @@ func RetrieveJsonUrl(index_url string) (string, error) {
 	return "", errors.New("Missing <script> in the node tree")
 }
 
-
 type JsonVid struct {
-	MimeType			string `json:"mimeType"`
-	VersionProg		 int	`json:"versionProg"`
-	VersionLibelle	  string `json:"versionLibelle"`
-	Quality			 string `json:"quality"`
-	ID				  string `json:"id"`
-	Width			   int	`json:"width"`
+	MimeType            string `json:"mimeType"`
+	VersionProg         int    `json:"versionProg"`
+	VersionLibelle      string `json:"versionLibelle"`
+	Quality             string `json:"quality"`
+	ID                  string `json:"id"`
+	Width               int    `json:"width"`
 	VersionShortLibelle string `json:"versionShortLibelle"`
-	URL				 string `json:"url"`
-	Height			  int	`json:"height"`
-	VersionCode		 string `json:"versionCode"`
-	Bitrate			 int	`json:"bitrate"`
-	MediaType		   string `json:"mediaType"`
+	URL                 string `json:"url"`
+	Height              int    `json:"height"`
+	VersionCode         string `json:"versionCode"`
+	Bitrate             int    `json:"bitrate"`
+	MediaType           string `json:"mediaType"`
 }
-
 
 type JsonBody struct {
 	VideoJSONPlayer struct {
 		VSR struct {
 			HTTPSEQ2 JsonVid `json:"HTTPS_EQ_2"`
 			HTTPSEQ1 JsonVid `json:"HTTPS_EQ_1"`
-			HLSXQ2 JsonVid `json:"HLS_XQ_2"`
-			HLSXQ1 JsonVid `json:"HLS_XQ_1"`
+			HLSXQ2   JsonVid `json:"HLS_XQ_2"`
+			HLSXQ1   JsonVid `json:"HLS_XQ_1"`
 			HTTPSMQ1 JsonVid `json:"HTTPS_MQ_1"`
 			HTTPSSQ1 JsonVid `json:"HTTPS_SQ_1"`
 			HTTPSHQ1 JsonVid `json:"HTTPS_HQ_1"`
@@ -143,7 +136,6 @@ type JsonBody struct {
 	} `json:"videoJsonPlayer"`
 }
 
-
 func RetrieveMpgUrl(json_url string) string {
 	json_data_s := DownloadUrl(json_url)
 	var json_data JsonBody
@@ -153,14 +145,13 @@ func RetrieveMpgUrl(json_url string) string {
 
 	var mpg_url string
 	switch {
-		case json_data_sub.HTTPSSQ1 != JsonVid{}:
-			mpg_url = json_data_sub.HTTPSSQ1.URL
-		case json_data_sub.HTTPSSQ2 != JsonVid{}:
-			mpg_url = json_data_sub.HTTPSSQ2.URL
+	case json_data_sub.HTTPSSQ1 != JsonVid{}:
+		mpg_url = json_data_sub.HTTPSSQ1.URL
+	case json_data_sub.HTTPSSQ2 != JsonVid{}:
+		mpg_url = json_data_sub.HTTPSSQ2.URL
 	}
-        return mpg_url
+	return mpg_url
 }
-
 
 /*func DisplayProgress(progress chan int) {
     for i := range progress {
@@ -168,33 +159,30 @@ func RetrieveMpgUrl(json_url string) string {
     }
 }*/
 
-
 func percent(total_size int, current_size int) int {
-    return 100 * current_size / total_size
+	return 100 * current_size / total_size
 }
-
 
 func DownloadMpg(filepath string, url string) error {
-//func DownloadMpg(filepath string, url string, progress chan int) error {
-        // Get the data
-        resp, err := http.Get(url)
-        if err != nil {
-                return err
-        }
-        defer resp.Body.Close()
+	//func DownloadMpg(filepath string, url string, progress chan int) error {
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 
-        // Create the file
-        out, err := os.Create(filepath)
-        if err != nil {
-                return err
-        }
-        defer out.Close()
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
 
-        // Write the body to file
-        _, err = io.Copy(out, resp.Body)
-        return err
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
-
 
 func main() {
 	var conf Config
@@ -203,25 +191,25 @@ func main() {
 	if err != nil {
 		return
 	}
-        fmt.Printf("URL : %s\n", conf.url)
+	fmt.Printf("URL : %s\n", conf.url)
 
 	// retrieve body data and parse it to get the json url
 	json_url, err := RetrieveJsonUrl(conf.url)
 	fmt.Printf("JSON url : %s\n", json_url)
 
 	// retrieve the json and parse it to get the mpg url
-        mpg_url := RetrieveMpgUrl(json_url)
+	mpg_url := RetrieveMpgUrl(json_url)
 	fmt.Printf("MPG url : %s\n", mpg_url)
 
-        // retrieve the mpg file with a nice progress bar
-//        progress := make(chan int)
+	// retrieve the mpg file with a nice progress bar
+	//        progress := make(chan int)
 
-        i := strings.Split(conf.url, "/")
-        name := i[6] + "-" + i[5]
-        filepath := conf.destination + "/" + name + ".mp4"
+	i := strings.Split(conf.url, "/")
+	name := i[6] + "-" + i[5]
+	filepath := conf.destination + "/" + name + ".mp4"
 
-        fmt.Printf("DEST : %s\n", filepath)
+	fmt.Printf("DEST : %s\n", filepath)
 
-//        go DisplayProgress(progress)
-        DownloadMpg(filepath, mpg_url) //, progress)
+	//        go DisplayProgress(progress)
+	DownloadMpg(filepath, mpg_url) //, progress)
 }
